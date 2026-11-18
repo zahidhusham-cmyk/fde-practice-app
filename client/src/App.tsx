@@ -1,4 +1,5 @@
 import { BrowserRouter, NavLink, Route, Routes } from "react-router-dom";
+import { TicketCreate } from "./pages/TicketCreate";
 import { TicketDetail } from "./pages/TicketDetail";
 import { TicketList } from "./pages/TicketList";
 
@@ -16,6 +17,7 @@ export function App() {
         <main className="main">
           <Routes>
             <Route path="/" element={<TicketList />} />
+            <Route path="/tickets/new" element={<TicketCreate />} />
             <Route path="/tickets/:id" element={<TicketDetail />} />
           </Routes>
         </main>

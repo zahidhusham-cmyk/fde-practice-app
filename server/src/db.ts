@@ -1,5 +1,5 @@
 import { seedAgents, seedTickets } from "./data/seed";
-import type { Agent, Ticket } from "./types";
+import type { Agent, Category, Priority, Ticket } from "./types";
 
 let tickets: Ticket[] = [];
 let agents: Agent[] = [];
@@ -25,6 +25,36 @@ export function getAgents(): Agent[] {
 
 export function getAgentById(id: string): Agent | undefined {
   return agents.find((agent) => agent.id === id);
+}
+
+export function createTicket(input: {
+  title: string;
+  description: string;
+  priority: Priority;
+  category: Category;
+  requester: string;
+}): Ticket {
+  const nextNumber = tickets.reduce((max, ticket) => {
+    const match = /^TCK-(\d+)$/.exec(ticket.id);
+    const value = match ? Number(match[1]) : 0;
+    return Math.max(max, value);
+  }, 1000);
+  const now = new Date().toISOString();
+  const ticket: Ticket = {
+    id: `TCK-${nextNumber + 1}`,
+    title: input.title,
+    description: input.description,
+    status: "open",
+    priority: input.priority,
+    category: input.category,
+    requester: input.requester,
+    assigneeId: null,
+    createdAt: now,
+    updatedAt: now,
+    comments: [],
+  };
+  tickets.push(ticket);
+  return ticket;
 }
 
 export function updateTicket(

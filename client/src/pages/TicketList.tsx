@@ -24,6 +24,7 @@ function agentName(agents: Agent[], assigneeId: string | null) {
 export function TicketList() {
   const [searchParams, setSearchParams] = useSearchParams();
   const page = Math.max(1, Number(searchParams.get("page")) || 1);
+  const query = searchParams.get("q") ?? "";
   const [data, setData] = useState<TicketListResponse | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +33,7 @@ export function TicketList() {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    Promise.all([fetchTickets(page, PAGE_SIZE), fetchAgents()])
+    Promise.all([fetchTickets(page, PAGE_SIZE, query), fetchAgents()])
       .then(([ticketPage, agentList]) => {
         if (cancelled) return;
         setData(ticketPage);
@@ -48,10 +49,20 @@ export function TicketList() {
     return () => {
       cancelled = true;
     };
-  }, [page]);
+  }, [page, query]);
 
   function goToPage(next: number) {
-    setSearchParams({ page: String(next) });
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("page", String(next));
+    setSearchParams(nextParams);
+  }
+
+  function onSearch(value: string) {
+    const nextParams = new URLSearchParams(searchParams);
+    if (value) nextParams.set("q", value);
+    else nextParams.delete("q");
+    nextParams.delete("page");
+    setSearchParams(nextParams);
   }
 
   return (
@@ -61,11 +72,27 @@ export function TicketList() {
           <h1>Tickets</h1>
           <p className="muted">
             {data
-              ? `${data.pagination.total} tickets in the queue`
+              ? query
+                ? `${data.pagination.total} matching tickets`
+                : `${data.pagination.total} tickets in the queue`
               : "All open work for Northstar Retail IT"}
           </p>
         </div>
+        <Link to="/tickets/new" className="button-link">
+          New ticket
+        </Link>
       </div>
+
+      <form className="ticket-search" role="search" onSubmit={(event) => event.preventDefault()}>
+        <label htmlFor="ticket-search">Search tickets</label>
+        <input
+          id="ticket-search"
+          type="search"
+          value={query}
+          placeholder="Search by id, title, description, or requester"
+          onChange={(event) => onSearch(event.target.value)}
+        />
+      </form>
 
       {error && <p className="banner error">{error}</p>}
       {loading && !data && <p className="muted">Loading tickets…</p>}
@@ -88,7 +115,7 @@ export function TicketList() {
                 {data.tickets.length === 0 ? (
                   <tr>
                     <td colSpan={6} className="empty">
-                      No tickets on this page.
+                      {query ? "No tickets match your search." : "No tickets on this page."}
                     </td>
                   </tr>
                 ) : (
