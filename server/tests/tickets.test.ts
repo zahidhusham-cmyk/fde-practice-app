@@ -42,6 +42,68 @@ describe("tickets API", () => {
     expect(res.body.pagination.total).toBe(28);
   });
 
+  it("filters tickets by id, title, description, or requester", async () => {
+    const res = await request(app).get("/api/tickets").query({ q: "badge" });
+
+    expect(res.status).toBe(200);
+    const ids = res.body.tickets.map((ticket: { id: string }) => ticket.id);
+    expect(ids).toContain("TCK-1001");
+    expect(ids).not.toContain("TCK-1002");
+    expect(res.body.pagination.total).toBe(ids.length);
+  });
+
+  it("returns the ticket when the search query is its id", async () => {
+    const res = await request(app).get("/api/tickets").query({ q: "TCK-1002" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.tickets).toEqual([
+      expect.objectContaining({
+        id: "TCK-1002",
+        title: "POS terminal 3 frozen at checkout",
+        requester: "Chris Nguyen",
+        status: "in_progress",
+      }),
+    ]);
+    expect(res.body.pagination).toMatchObject({
+      page: 1,
+      total: 1,
+      totalPages: 1,
+    });
+  });
+
+  it("returns the ticket when the search query matches its title", async () => {
+    const res = await request(app).get("/api/tickets").query({ q: "POS terminal 3" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.tickets).toHaveLength(1);
+    expect(res.body.tickets[0].id).toBe("TCK-1002");
+    expect(res.body.tickets[0].title).toBe("POS terminal 3 frozen at checkout");
+  });
+
+  it("pages filtered tickets from the first match", async () => {
+    const all = await request(app).get("/api/tickets").query({ q: "store", limit: 50 });
+    const page = await request(app).get("/api/tickets").query({ q: "store", page: 1, limit: 10 });
+
+    expect(all.status).toBe(200);
+    expect(all.body.pagination.total).toBeGreaterThan(10);
+    expect(page.status).toBe(200);
+    expect(page.body.tickets).toHaveLength(10);
+    expect(page.body.tickets[0].id).toBe(all.body.tickets[0].id);
+    expect(page.body.pagination.total).toBe(all.body.pagination.total);
+  });
+
+  it("returns no tickets when nothing matches", async () => {
+    const res = await request(app).get("/api/tickets").query({ q: "zzzz-no-such-ticket" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.tickets).toEqual([]);
+    expect(res.body.pagination).toMatchObject({
+      page: 1,
+      total: 0,
+      totalPages: 1,
+    });
+  });
+
   it("returns a ticket by id", async () => {
     const res = await request(app).get("/api/tickets/TCK-1002");
 
@@ -102,6 +164,67 @@ describe("tickets API", () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error).toMatch(/at least one/i);
+  });
+
+  it("creates a ticket at the end of the list", async () => {
+    const res = await request(app).put("/api/tickets").send({
+      title: "Badge printer jam",
+      description: "The HQ badge printer jams on every other card.",
+      requester: "Alex Kim",
+      priority: "high",
+      category: "hardware",
+    });
+
+    expect(res.status).toBe(201);
+    expect(res.body).toMatchObject({
+      id: "TCK-1029",
+      title: "Badge printer jam",
+      requester: "Alex Kim",
+      status: "open",
+      priority: "high",
+      category: "hardware",
+      assigneeId: null,
+      comments: [],
+    });
+
+    const fetched = await request(app).get("/api/tickets/TCK-1029");
+    expect(fetched.status).toBe(200);
+    expect(fetched.body.title).toBe("Badge printer jam");
+
+    const list = await request(app).get("/api/tickets").query({ limit: 50 });
+    expect(list.body.tickets.at(-1).id).toBe("TCK-1029");
+    expect(list.body.pagination.total).toBe(29);
+  });
+
+  it("rejects a ticket with a missing title", async () => {
+    const res = await request(app).put("/api/tickets").send({
+      description: "The printer is jammed.",
+      requester: "Alex Kim",
+      priority: "low",
+      category: "hardware",
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/title, description, and requester/i);
+
+    const list = await request(app).get("/api/tickets");
+    expect(list.body.pagination.total).toBe(28);
+  });
+
+  it("rejects a ticket with an invalid priority", async () => {
+    const res = await request(app).put("/api/tickets").send({
+      title: "Badge printer jam",
+      description: "The HQ badge printer jams on every other card.",
+      requester: "Alex Kim",
+      priority: "critical",
+      category: "hardware",
+    });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/priority must be one of/i);
+
+    const list = await request(app).get("/api/tickets");
+    expect(list.body.pagination.total).toBe(28);
   });
 
   it("returns 404 when updating an unknown ticket", async () => {

@@ -1,11 +1,20 @@
 import { Router } from "express";
 import {
+  createTicket,
   getAgentById,
   getTicketById,
   listTickets,
   updateTicket,
 } from "../db";
-import { STATUSES, type Status } from "../types";
+import {
+  CATEGORIES,
+  PRIORITIES,
+  STATUSES,
+  type Category,
+  type Priority,
+  type Status,
+  type Ticket,
+} from "../types";
 
 export const ticketsRouter = Router();
 
@@ -21,22 +30,79 @@ function parseLimit(value: unknown): number {
   return Math.min(limit, 50);
 }
 
+function parseQuery(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.trim().toLowerCase();
+}
+
+function requiredText(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function isPriority(value: unknown): value is Priority {
+  return typeof value === "string" && PRIORITIES.includes(value as Priority);
+}
+
+function isCategory(value: unknown): value is Category {
+  return typeof value === "string" && CATEGORIES.includes(value as Category);
+}
+
+function matchesQuery(ticket: Ticket, query: string): boolean {
+  return [ticket.id, ticket.title, ticket.description, ticket.requester].some((field) =>
+    field.toLowerCase().includes(query),
+  );
+}
+
 ticketsRouter.get("/", (req, res) => {
   const page = parsePage(req.query.page);
   const limit = parseLimit(req.query.limit);
-  const all = listTickets();
-  const offset = page * limit;
-  const tickets = all.slice(offset, offset + limit);
+  const query = parseQuery(req.query.q);
+  const matched = listTickets().filter((ticket) => query === "" || matchesQuery(ticket, query));
+  const offset = (page - 1) * limit;
+  const tickets = matched.slice(offset, offset + limit);
 
   res.json({
     tickets,
     pagination: {
       page,
       limit,
-      total: all.length,
-      totalPages: Math.max(1, Math.ceil(all.length / limit)),
+      total: matched.length,
+      totalPages: Math.max(1, Math.ceil(matched.length / limit)),
     },
   });
+});
+
+ticketsRouter.put("/", (req, res) => {
+  const title = requiredText(req.body?.title);
+  const description = requiredText(req.body?.description);
+  const requester = requiredText(req.body?.requester);
+  const { priority, category } = req.body ?? {};
+
+  if (!title || !description || !requester) {
+    res.status(400).json({
+      error: "title, description, and requester are required",
+    });
+    return;
+  }
+
+  if (!isPriority(priority)) {
+    res.status(400).json({
+      error: `priority must be one of: ${PRIORITIES.join(", ")}`,
+    });
+    return;
+  }
+
+  if (!isCategory(category)) {
+    res.status(400).json({
+      error: `category must be one of: ${CATEGORIES.join(", ")}`,
+    });
+    return;
+  }
+
+  const ticket = createTicket({ title, description, requester, priority, category });
+  res.status(201).json(ticket);
 });
 
 ticketsRouter.get("/:id", (req, res) => {

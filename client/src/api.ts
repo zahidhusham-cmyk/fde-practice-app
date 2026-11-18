@@ -18,16 +18,31 @@ async function request<T>(input: string, init?: RequestInit): Promise<T> {
   return data as T;
 }
 
-export function fetchTickets(page = 1, limit = 10): Promise<TicketListResponse> {
+export function fetchTickets(page = 1, limit = 10, query = ""): Promise<TicketListResponse> {
   const params = new URLSearchParams({
     page: String(page),
     limit: String(limit),
   });
+  const trimmed = query.trim();
+  if (trimmed) params.set("q", trimmed);
   return request<TicketListResponse>(`/api/tickets?${params.toString()}`);
 }
 
 export function fetchTicket(id: string): Promise<Ticket> {
   return request<Ticket>(`/api/tickets/${id}`);
+}
+
+export function createTicket(body: {
+  title: string;
+  description: string;
+  priority: Ticket["priority"];
+  category: Ticket["category"];
+  requester: string;
+}): Promise<Ticket> {
+  return request<Ticket>("/api/tickets", {
+    method: "PUT",
+    body: JSON.stringify(body),
+  });
 }
 
 export function updateTicket(
