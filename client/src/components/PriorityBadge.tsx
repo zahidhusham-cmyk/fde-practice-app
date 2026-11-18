@@ -1,0 +1,9 @@
+import type { Priority } from "../types";
+
+export function PriorityBadge({ priority }: { priority: Priority }) {
+  return (
+    <span className={`badge priority-${priority}`}>
+      {priority.charAt(0).toUpperCase() + priority.slice(1)}
+    </span>
+  );
+}
